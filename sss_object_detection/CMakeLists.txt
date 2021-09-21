@@ -18,6 +18,7 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   smarc_msgs
   cv_bridge
+  message_generation
 )
 
 ## System dependencies are found with CMake's conventions
@@ -54,11 +55,10 @@ catkin_python_setup()
 ##   * add every package in MSG_DEP_SET to generate_messages(DEPENDENCIES ...)
 
 ## Generate messages in the 'msg' folder
-# add_message_files(
-#   FILES
-#   Message1.msg
-#   Message2.msg
-# )
+ add_message_files(
+   FILES
+   line.msg
+ )
 
 ## Generate services in the 'srv' folder
 # add_service_files(
@@ -75,10 +75,11 @@ catkin_python_setup()
 # )
 
 ## Generate added messages and services with any dependencies listed here
-# generate_messages(
-#   DEPENDENCIES
+ generate_messages(
+   DEPENDENCIES
 #   geometry_msgs#   nav_msgs#   std_msgs#   vision_msgs#   visualization_msgs
-# )
+std_msgs
+)
 
 ################################################
 ## Declare ROS dynamic reconfigure parameters ##
@@ -114,6 +115,7 @@ catkin_package(
 #  LIBRARIES sss_object_detection
 #  CATKIN_DEPENDS geometry_msgs nav_msgs rospy std_msgs tf vision_msgs visualization_msgs
 #  DEPENDS system_lib
+CATKIN_DEPENDS message_runtime
 )
 
 ###########
@@ -169,6 +171,10 @@ include_directories(
 catkin_install_python(PROGRAMS
   scripts/sim_sss_detection_publisher.py
   scripts/sss_detection_publisher.py
+  scripts/sim_lines.py
+  scripts/sim_detect_lines.py
+  scripts/sim_tf_lines.py
+  scripts/sim_lines_wf.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

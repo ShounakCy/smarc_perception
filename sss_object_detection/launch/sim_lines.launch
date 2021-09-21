@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<launch>
+    <arg name="robot_name" default="sam"/>
+
+    <node name="buoy_markers" pkg="marked_pos_publisher" type="marked_pos_publisher.py">
+        <param name="robot_name" value="$(arg robot_name)"/>
+    </node>
+
+    <node name="sim_tf_lines" pkg="sss_object_detection" type="sim_tf_lines.py">
+        <param name="robot_name" value="$(arg robot_name)"/>
+
+    
+
+    </node>
+
+
+</launch>
