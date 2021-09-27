@@ -57,8 +57,11 @@ class sim_sss_detector:
             '/{}/sim/marked_positions'.format(robot_name), MarkerArray,
             self._tf_marker_pose)
         self.pub_intercept = rospy.Publisher('/{}/sim/intercepts'.format(robot_name) ,PointCloud, queue_size=10)
+        self.pub_intercept_utm = rospy.Publisher('/{}/sim/intercepts_utm'.format(robot_name) ,line, queue_size=10)
+
 
         self.pub_detected_line = rospy.Publisher('/{}/sim/detected_line'.format(robot_name), Marker, queue_size=10)
+        
         self.pub_marker3 = rospy.Publisher('/{}/sim/marker3'.format(robot_name), line, queue_size=10)
         
 
@@ -113,22 +116,19 @@ class sim_sss_detector:
 
 
 
-        # marker3_utm = self._transform_pose_2_utm(marker, marker.header.frame_id, self.marked_positions_3)
-        # print >>sys.stderr,     'marker3_utm "%s"'  % marker3_utm
+        marker3_utm = self._transform_pose_2_utm(marker, marker.header.frame_id, self.marked_positions_3)
+        print >>sys.stderr,     'marker3_utm "%s"'  % marker3_utm
 
-        # marker3.x = marker3_utm.pose.position.x
-        # marker3.y = marker3_utm.pose.position.y
-        # marker3.z = marker3_utm.pose.position.z
-        # marker3.frame_id = marker3_utm.header.frame_id
-
-
-        marker3.x = self.marked_positions_3[0]
-        marker3.y = self.marked_positions_3[1]
-        marker3.z = self.marked_positions_3[2]
-        marker3.frame_id = "map"
+        marker3.x = marker3_utm.pose.position.x
+        marker3.y = marker3_utm.pose.position.y
+        marker3.z = marker3_utm.pose.position.z
+        marker3.frame_id = marker3_utm.header.frame_id
 
 
-
+        #marker3.x = self.marked_positions_3[0]+3.0
+        #marker3.y = self.marked_positions_3[1]
+        #marker3.z = self.marked_positions_3[2]
+        #marker3.frame_id = "map"
         self.pub_marker3.publish(marker3)
 
         A = np.vstack([X_, np.ones(len(X_))]).T
@@ -184,7 +184,14 @@ class sim_sss_detector:
 
     def _detect_pcl(self,m_t, m1,c):
         intercept_msg= self._transform_pose_2map(m_t,m_t.header.frame_id,c)
-        print >>sys.stderr,'intercept_msg "%s"'  % intercept_msg
+        intercept_msg_utm_line = line()
+        intercept_msg_utm = self._transform_pose_2_utm_intercept(m_t,m_t.header.frame_id,c )
+        intercept_msg_utm_line.x = intercept_msg_utm.pose.position.x
+        intercept_msg_utm_line.y = intercept_msg_utm.pose.position.y
+        intercept_msg_utm_line.z = intercept_msg_utm.pose.position.z
+        intercept_msg_utm_line.frame_id = intercept_msg_utm.header.frame_id
+        self.pub_intercept_utm.publish(intercept_msg_utm_line)
+        print >>sys.stderr,'intercept_msg_utm "%s"'  % intercept_msg_utm
         #rospy.sleep(1)
         #self.detected_points = PointCloud()
         self.detected_points.header.frame_id = intercept_msg.header.frame_id
@@ -280,19 +287,29 @@ class sim_sss_detector:
         return pose_transformed
     
     def _transform_pose_2_utm(self, pose, from_frame,m3):
-        pose.pose.position.x = m3[0]
+        pose.pose.position.x = m3[0]+2
         pose.pose.position.y = m3[1]
         pose.pose.position.z = m3[2]
-        #print >>sys.stderr, 'pose_intercept = "%s"'  % pose
+        #print >>sys.stderr, 'pose = "%s"'  % pose
         trans = self._wait_for_transform(from_frame=from_frame,
                                          to_frame="utm")
         pose_transformed = tf2_geometry_msgs.do_transform_pose(pose, trans)
         return pose_transformed
 
+    def _transform_pose_2_utm_intercept(self, pose, from_frame,c):
+        pose.pose.position.x = 0.0
+        pose.pose.position.y = c
+        pose.pose.position.z = 0.0
+        #print >>sys.stderr, 'pose_intercept = "%s"'  % pose
+        trans = self._wait_for_transform(from_frame=from_frame,
+                                         to_frame=self.map_frame_id)
+        pose_transformed = tf2_geometry_msgs.do_transform_pose(pose, trans)
+        return pose_transformed 
+
 
     def _transform_pose(self, pose, from_frame):
         trans = self._wait_for_transform(from_frame=from_frame,
-                                         to_frame=self.gt_frame_id)
+                                         to_frame=self.published_frame_id)
         pose_transformed = tf2_geometry_msgs.do_transform_pose(pose, trans)
         return pose_transformed
   
