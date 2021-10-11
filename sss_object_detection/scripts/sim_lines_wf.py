@@ -16,10 +16,11 @@ import random
 from matplotlib import pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from skimage.measure import LineModelND, ransac
+from sklearn.linear_model import LinearRegression, RANSACRegressor
+
 
 class sim_sss_detector:
-    """A mock SSS object detector for simulation. Only objects within the
-    detection_range of the vehicle will be detectable."""
+    
     def __init__(self,
                  robot_name,):
         self.robot_name = robot_name
@@ -43,6 +44,9 @@ class sim_sss_detector:
         #self.points = []
         self.marker3_x ={}
         self.marker3_y= {}
+
+        self.X = []
+        self.Y = []
     
         self.marked_positions = {}
         self.point_list=[]
@@ -52,20 +56,21 @@ class sim_sss_detector:
             '/{}/sim/odom'.format(self.robot_name), Odometry,
             self._update_pose)
         self.marked_3_sub = rospy.Subscriber(
-            '/{}/sim/marker3'.format(robot_name), line,
+            '/{}/sim/marker3'.format(robot_name), PointStamped,
             self.marker3_pose)
         self.intercept_sub = rospy.Subscriber('/{}/sim/intercepts'.format(robot_name), PointCloud, self._point_cloud)
-        self.intercept_points = rospy.Publisher('/{}/sim/intercept_points'.format(robot_name), PointStamped, queue_size=10)
+        self.pub_intercept_map = rospy.Publisher('/{}/sim/intercept_points'.format(robot_name), PointStamped, queue_size=10)
         self.pub_fitted_line = rospy.Publisher('/{}/sim/fitted_line'.format(robot_name), Marker, queue_size=10)
 
-    
+        #self.intercept_utm = rospy.Subscriber('/{}/sim/intercepts_utm'.format(robot_name), PointStamped, self._point_cloud)
+
     
     def marker3_pose(self, msg):
         """Update prev_pose and current_pose according to the odom msg received"""
         #print >>sys.stderr, 'robot pose::::::::::::::::::    = "%s"'  % msg
 
-        self.marker3_x = msg.x
-        self.marker3_y = msg.y
+        self.marker3_x = msg.point.x
+        self.marker3_y = msg.point.y
 
         #return self.marker3_x, self.marker3_y
 
@@ -74,7 +79,8 @@ class sim_sss_detector:
         #print >>sys.stderr, 'robot pose::::::::::::::::::    = "%s"'  % msg
 
         self.current_pose = msg.pose
-        
+
+
     def _point_cloud(self,pts):
         
         #print >>sys.stderr, 'Point_Cloud= "%s"'  % pts
@@ -83,10 +89,10 @@ class sim_sss_detector:
             points_y = pts.points[i].y
             points_z = pts.points[i].z
 
-        #points = np.zeros(shape=(len(pts.points),3))
             point_list = [points_x, points_y, points_z]
             #print >>sys.stderr, 'point_list = "%s"'  % point_list
-
+            self.X.append(point_list[0])
+            self.Y.append(point_list[1])
             self.pcl.append(point_list)
         points_np = np.array(self.pcl)
 
@@ -96,43 +102,75 @@ class sim_sss_detector:
         intercept_point.point.x = np.float64(points_np[len(points_np)-1][0])
         intercept_point.point.y = np.float64(points_np[len(points_np)-1][1])
         intercept_point.point.z = np.float64(points_np[len(points_np)-1][2])
-        self.intercept_points.publish(intercept_point)
+        self.pub_intercept_map.publish(intercept_point)
 
-        #print >>sys.stderr, 'points = "%s"'  % points_np
-        #print >>sys.stderr, 'points = "%s"'  % type(points)
-
-        #print >>sys.stderr, 'self.pcl = "%s"'  % self.pcl
-
-        #self.A, self.B, self.inliers = self._Ransacc(points_np)
-
-        #print >>sys.stderr, 'self.A= "%s"'  % self.A
-        #print >>sys.stderr, 'self.B= "%s"'  % self.B
-        #print >>sys.stderr, 'self.inliers= "%s"'  % self.inliers
-
-        
         print >>sys.stderr, 'points_np[len(points_np)-1][1] =  "%s"'  % points_np[len(points_np)-1][1]
-        if points_np[len(points_np)-1][1]>13.0:
-            print >>sys.stderr, 'points = "%s"'  % points_np
-            model_robust, inliers = ransac(points_np, LineModelND, min_samples=2,
-                                residual_threshold=1, max_trials=1000)
-            #print(inliers)
-            outliers = inliers == False
-            line_x = np.arange(-5.1, -4.85, 0.01)
-            #line_y = model.predict_y(line_x)
-            line_y_robust = model_robust.predict_y(line_x)
-            fig = plt.figure()
-            ax = fig.add_subplot(111, projection='3d')
-            ax.scatter(points_np[inliers][:, 0], points_np[inliers][:, 1], points_np[inliers][:, 2], c='b',
-                    marker='o', label='Inlier data')
-            ax.scatter(points_np[outliers][:, 0], points_np[outliers][:, 1], points_np[outliers][:, 2], c='r',
-                    marker='o', label='Outlier data')
-            ax.set_ylim([3,14])
-            ax.plot(line_x, line_y_robust, '-b', label='Robust line model')
-            ax.legend(loc='lower left')
-            plt.show()
-
         
+        """Using RANSAC to fit a line ,
+        fitting the after the robot has passed y = 8 and has 25 samples to fit a line with"""
 
+        if points_np[len(points_np)-1][1]>8.0 and len(points_np) > 25:
+            """Chaning the corrdinates as in the moving point cloud self.Y increases as the robot moves forward"""
+            X= np.array(self.Y)
+            y= np.array(self.X)
+            
+            ransac = RANSACRegressor(LinearRegression(), 
+                         max_trials=100, 
+                         min_samples=20, 
+                         residual_threshold=0.01)
+            ransac.fit(X.reshape(-1,1), y)
+            inlier_mask = ransac.inlier_mask_
+            outlier_mask = np.logical_not(inlier_mask)
+            
+            line_X = np.arange(3, 14, 1)
+            line_y_ransac = ransac.predict(line_X[:, np.newaxis])            
+            fig = plt.figure()
+            ax = fig.add_subplot(111)
+            ax.scatter(X[inlier_mask], y[inlier_mask], c='blue', marker='o', label='Inliers')
+            ax.scatter(X[outlier_mask], y[outlier_mask], c='lightgreen', marker='s', label='Outliers')            
+            ax.plot(line_X, line_y_ransac, color='red') 
+            print >>sys.stderr,'Slope: "%.3f"' % ransac.estimator_.coef_[0]
+            print >>sys.stderr,'Intercept: "%.3f"' % ransac.estimator_.intercept_
+            plt.show()
+            
+        """Fit a line using 3D points"""
+        """
+        print >>sys.stderr, 'points = "%s"'  % points_np
+        model_robust, inliers = ransac(points_np, LineModelND, min_samples=2,
+                            residual_threshold=1, max_trials=100)
+        #print(inliers)
+        outliers = inliers == False
+        line_x = np.arange(-5.1, -4.85, 0.01)
+        #line_y = model.predict_y(line_x)
+        line_y_robust = model_robust.predict_y(line_x)
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+        ax.scatter(points_np[inliers][:, 0], points_np[inliers][:, 1], points_np[inliers][:, 2], c='b',
+                marker='o', label='Inlier data')
+        ax.scatter(points_np[outliers][:, 0], points_np[outliers][:, 1], points_np[outliers][:, 2], c='r',
+                marker='o', label='Outlier data')
+        ax.set_ylim([3,14])
+        ax.plot(line_x, line_y_robust, '-b', label='Robust line model')
+        ax.legend(loc='lower left')
+        print >>sys.stderr,'Slope: "%.3f"' % model_robust.estimator_.coef_[0]
+        print >>sys.stderr,'Intercept: "%.3f"' % model_robust.estimator_.intercept_
+        plt.show()
+        """
+
+        """Same as above, fit a line with 3d points"""
+        """
+        print >>sys.stderr, 'points = "%s"'  % points_np
+        print >>sys.stderr, 'points = "%s"'  % type(points)
+
+        print >>sys.stderr, 'self.pcl = "%s"'  % self.pcl
+
+        self.A, self.B, self.inliers = self._Ransacc(points_np)
+
+        print >>sys.stderr, 'self.A= "%s"'  % self.A
+        print >>sys.stderr, 'self.B= "%s"'  % self.B
+        print >>sys.stderr, 'self.inliers= "%s"'  % self.inliers
+        """
+    """
     def _Ransacc(self, pts, thresh=0.2, maxIteration=1000):
         n_points = pts.shape[0]
         best_inliers = []
@@ -163,7 +201,7 @@ class sim_sss_detector:
                 self.B = pt_samples[0, :]
              
             return self.A, self.B, self.inliers
-
+    """
 
 
     def _rviz_line(self,X, Y):

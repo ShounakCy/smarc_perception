@@ -47,76 +47,45 @@ class sim_sss_detector:
 
     def _update_marked_positions(self, msg):
         """Update marked_positions based on the MarkerArray msg received."""
-        #if len(self.marked_positions_x) > 0:
-         #   return
 
         Line = line()
         for marker in msg.markers:
-            #self.marked_positions['{}/{}'.format(marker.ns, marker.id)] = marker
             self.marked_positions_x = marker.pose.position.x
             self.marked_positions_y = marker.pose.position.y
             self.marked_ns = marker.ns
             
             if self.marked_ns == "buoy_corner1":
                 x1 = int(np.unique(self.marked_positions_x))
-                #print >>sys.stderr, 'Marked Position_corner1 of = "%s"'  % x1
                 y1 = int(np.unique(self.marked_positions_y))
-                #print >>sys.stderr, 'Marked Position_corner1 of = "%s"'  % y1
-                #Line.ns = self.marked_ns
+                
             elif self.marked_ns == "buoy_corner2":
                 x2 = int(np.unique(self.marked_positions_x))
-                #print >>sys.stderr, 'Marked Position_corner2 of = "%s"'  % x2
                 y2 = int(np.unique(self.marked_positions_y))
-                #print >>sys.stderr, 'Marked Position_corner2 of = "%s"'  % y2
-                #Line.ns = self.marked_ns
+                
             elif self.marked_ns == "buoy_corner4":
                 x3 = int(np.unique(self.marked_positions_x))
-                #print >>sys.stderr, 'Marked Position_corner4 of = "%s"'  % x3
                 y3 = int(np.unique(self.marked_positions_y))
-                #print >>sys.stderr, 'Marked Position_corner4 of = "%s"'  % y3
-                #Line.ns = self.marked_ns
+                
             elif self.marked_ns == "buoy_corner3":
                 x4 = int(np.unique(self.marked_positions_x))
-                #print >>sys.stderr, 'Marked Position_corner3 of = "%s"'  % x4
                 y4 = int(np.unique(self.marked_positions_y))
-                #print >>sys.stderr, 'Marked Position_corner3 of = "%s"'  % y4
-                #Line.ns = self.marked_ns
-
-            #_ = plt.plot(self.marked_positions_x, self.marked_positions_y, 'o', label='Buoys', markersize=10)
-
+               
         X_= np.array([x1, x2, x3+0.0001, x4+0.0001])
-        #print >>sys.stderr, 'X = "%s"'  % X_
         Y_= np.array([y1, y2, y3, y4])
-        #print >>sys.stderr, 'Y = "%s"'  % Y_
 
         
         for i in range(len(X_)):
             X= np.array([X_[i-1], X_[i]])
-            #print >>sys.stderr, 'X = "%s"'   % X
             Y= np.array([Y_[i-1], Y_[i]])
-            #print >>sys.stderr, 'Y = "%s"'  % Y
-
-
-            #X= np.array([-5,-5])
-            #print >>sys.stderr, 'X = "%s"'   % X
-            #Y= np.array([4,14])
-            #print >>sys.stderr, 'Y = "%s"'  % Y
 
             A = np.vstack([X, np.ones(len(X))]).T
-            #print >>sys.stderr, 'A = "%s"'  % A
 
+            """Least square method is used to get the slope and intercepts"""
             m, c = np.linalg.lstsq(A, Y, rcond=None)[0]
             Line.ns = "Rope_" +str(i)
             Line.m = m
             Line.c = c
-            
-            #print >>sys.stderr, 'ns  = "%s"'  % self.marked_ns
-            #print >>sys.stderr, 'm  = "%s"'  % m
-            #print >>sys.stderr, 'c = "%s"'  % c
-            #return m, c
-            #_ = plt.plot(X, Y, 'o', label='Original data', markersize=10)
-            
-            #_ = plt.plot(X, m*X + c, 'r', label='Fitted line')
+           
             self.pub.publish(Line)
             rospy.sleep(1)
 
