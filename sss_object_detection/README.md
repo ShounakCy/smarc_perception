@@ -9,7 +9,7 @@ On ROS Melodic, `sim_sss_detection_publisher.py` needs to be run on python2 and 
 
 On ROS Noetic, both can be run on python3.
 
-### sam detect line and fit line
+### SAM detect line and fit line
 
 Go to package `sss_object_detection`
 
@@ -37,7 +37,7 @@ To execute, (terminal) /catkin_ws$ roslaunch sss_object_detection sim_lines.laun
 
 
 
-### sam follow waypoint
+### SAM follow waypoint
 
 Go to package `sam_action_servers`
 
