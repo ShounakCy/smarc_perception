@@ -9,7 +9,7 @@ On ROS Melodic, `sim_sss_detection_publisher.py` needs to be run on python2 and 
 
 On ROS Noetic, both can be run on python3.
 
-# sam detect line and fit line
+### sam detect line and fit line
 
 Go to package `sss_object_detection`
 
@@ -29,7 +29,6 @@ Go to package `sss_object_detection`
 To execute, (terminal) /catkin_ws$ roslaunch sss_object_detection sim_lines.launch
 
 `sim_lines_wf.py` - A line is fitted using RANSAC, from the point cloud formed from the subscribed intercept points.
- 
 
 
 
@@ -37,7 +36,8 @@ To execute, (terminal) /catkin_ws$ roslaunch sss_object_detection sim_lines.laun
 
 
 
-# sam follow waypoint
+
+### sam follow waypoint
 
 Go to package `sam_action_servers`
 
@@ -47,7 +47,7 @@ In the `bt_actions.py` file, a separate action client is created called as "A_Fo
 
 The goal is further sent to the action server `wp_depth_action_planner.py`, where the control action is performed. As a practice(rough check), the a static goal point was set in the "execute_cb" function to see if SAM is going to the respective wp.
 
-# How to run
+### How to run
 
 1. catkin_ws/$ catkin build sam_action_servers
 
@@ -60,7 +60,7 @@ The goal is further sent to the action server `wp_depth_action_planner.py`, wher
 4. (terminal 3) catkin_ws/$ roslaunch sss_object_detection sim_lines.launch
 (this will subscribe to the published markers in map frame and publish them in utm. Also this will publish the intercepts in utm frame.)
 
-5.( terminal 4) catkin_ws/$ rviz
+5. ( terminal 4) catkin_ws/$ rviz
 (to vizualize, choose marker.rviz)
 
 
