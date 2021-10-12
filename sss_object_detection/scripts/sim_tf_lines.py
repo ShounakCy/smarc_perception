@@ -22,7 +22,7 @@ class sim_sss_detector:
     
     def __init__(self,
                  robot_name,
-                 noise_sigma=.01):
+                 noise_sigma=.001):
         self.noise_sigma = noise_sigma
         self.robot_name = robot_name
         self.prev_pose = None
@@ -120,7 +120,7 @@ class sim_sss_detector:
         
         dist_from_line= math.sqrt(c*c)
         
-        if dist_from_line<10:
+        if dist_from_line<6:
 
             #LINE DETECTED'
             if m<0 and x1>0 and x3<0 and c>=y1 and c<=y3 :
@@ -168,7 +168,7 @@ class sim_sss_detector:
 
         #Publishing the intercepts as a PointCloud
         #shifting by 2 units in x, so as to be displayed in rviz
-        self.detected_points.points.append(Point32(m1[0]+2, intercept_msg.pose.position.y,m1[2]))
+        self.detected_points.points.append(Point32(m1[0]+3, intercept_msg.pose.position.y,m1[2]))
         self.pub_intercept.publish(self.detected_points)
 
         #Transforming the intercepts from map frame to utm frame
@@ -276,7 +276,7 @@ class sim_sss_detector:
     def _transform_pose_2_utm(self, pose, from_frame,m):
         """Transform marker from map frame to utm frame and shifting the x by 2 units, so that 
         when robot tries to goto this waypoint it doesn't hits the buoy marker"""
-        pose.pose.position.x = m[0]+2
+        pose.pose.position.x = m[0]+3
         pose.pose.position.y = m[1]
         pose.pose.position.z = m[2]
         trans = self._wait_for_transform(from_frame=from_frame,
@@ -287,7 +287,7 @@ class sim_sss_detector:
     def _transform_pose_2_utm_intercept(self, pose, from_frame,msg_y, m1):
         """Transform intercepts from map frame to utm frame and shifting the x by 2 units, so that 
         when robot tries to goto this waypoint it doesn't hits the rope"""
-        pose.pose.position.x = m1[0]+2
+        pose.pose.position.x = m1[0]+3
         pose.pose.position.y = msg_y
         pose.pose.position.z = m1[2]
         trans = self._wait_for_transform(from_frame=from_frame,

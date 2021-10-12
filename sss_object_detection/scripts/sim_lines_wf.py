@@ -17,12 +17,16 @@ from matplotlib import pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from skimage.measure import LineModelND, ransac
 from sklearn.linear_model import LinearRegression, RANSACRegressor
+import tf2_ros
+import tf2_geometry_msgs
 
 
 class sim_sss_detector:
     
     def __init__(self,
-                 robot_name,):
+                 robot_name,
+                 noise_sigma= 0.001):
+        self.noise_sigma = noise_sigma
         self.robot_name = robot_name
         self.prev_pose = None
         self.current_pose = None
@@ -37,6 +41,8 @@ class sim_sss_detector:
         self.published_frame_id = '{}/base_link'.format(self.robot_name)
         self.world_frame_id = "world_ned"
 
+        self.counter = 0.0
+
         self.inliers = []
         self.A = []
         self.B = []
@@ -47,7 +53,8 @@ class sim_sss_detector:
 
         self.X = []
         self.Y = []
-    
+        self.tf_buffer = tf2_ros.Buffer()
+        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
         self.marked_positions = {}
         self.point_list=[]
         #self.tf_buffer = tf2_ros.Buffer()
@@ -61,6 +68,7 @@ class sim_sss_detector:
         self.intercept_sub = rospy.Subscriber('/{}/sim/intercepts'.format(robot_name), PointCloud, self._point_cloud)
         self.pub_intercept_map = rospy.Publisher('/{}/sim/intercept_points'.format(robot_name), PointStamped, queue_size=10)
         self.pub_fitted_line = rospy.Publisher('/{}/sim/fitted_line'.format(robot_name), Marker, queue_size=10)
+        self.pub_predicted_intercept = rospy.Publisher('/{}/sim/predicted_intercepts'.format(robot_name), PointStamped, queue_size=10)
 
         #self.intercept_utm = rospy.Subscriber('/{}/sim/intercepts_utm'.format(robot_name), PointStamped, self._point_cloud)
 
@@ -82,7 +90,7 @@ class sim_sss_detector:
 
 
     def _point_cloud(self,pts):
-        
+        """Subscribing to the intercept points which are published in map frame"""
         #print >>sys.stderr, 'Point_Cloud= "%s"'  % pts
         for i in range(len(pts.points)):
             points_x = pts.points[i].x
@@ -96,6 +104,8 @@ class sim_sss_detector:
             self.pcl.append(point_list)
         points_np = np.array(self.pcl)
 
+
+        """Publishing the latest intercepts as Point Stamped """
         intercept_point = PointStamped()
         intercept_point.header.frame_id = "map"
         intercept_point.header.stamp = rospy.Time(0)
@@ -104,35 +114,69 @@ class sim_sss_detector:
         intercept_point.point.z = np.float64(points_np[len(points_np)-1][2])
         self.pub_intercept_map.publish(intercept_point)
 
-        print >>sys.stderr, 'points_np[len(points_np)-1][1] =  "%s"'  % points_np[len(points_np)-1][1]
+        #print >>sys.stderr, 'y =  "%s"'  % points_np[len(points_np)-1][1]
+        #print >>sys.stderr, 'x =  "%s"'  % points_np[len(points_np)-1][0]
         
         """Using RANSAC to fit a line ,
         fitting the after the robot has passed y = 8 and has 25 samples to fit a line with"""
+        #r = rospy.Rate(15.)
+        
+        
+        if points_np[len(points_np)-1][1] >= 6 and len(points_np) > 20:
+            print >>sys.stderr, 'counter1 =  "%s"'  % self.counter 
+            print >>sys.stderr, 'range1 =  "%s"'  % int(points_np[len(points_np)-1][1])
+            if self.counter <= int(points_np[len(points_np)-1][1]):
+                print >>sys.stderr, 'counter2 =  "%s"'  % self.counter 
+                print >>sys.stderr, 'range2 =  "%s"'  % int(points_np[len(points_np)-1][1])
+                """Changing the corrdinates as in the moving point cloud self.Y increases as the robot moves forward"""
+                X= np.array(self.Y)
+                y= np.array(self.X)
+                
+                ransac = RANSACRegressor(LinearRegression(), 
+                            max_trials=100, 
+                            min_samples=20, 
+                            residual_threshold=0.001)
+                ransac.fit(X.reshape(-1,1), y)
+                inlier_mask = ransac.inlier_mask_
+                outlier_mask = np.logical_not(inlier_mask)
+                
+                line_X = np.arange(3, 14, 1)
+                line_y_ransac = ransac.predict(line_X[:, np.newaxis])            
+                # fig = plt.figure()
+                # ax = fig.add_subplot(111)
+                # ax.scatter(X[inlier_mask], y[inlier_mask], c='blue', marker='o', label='Inliers')
+                # ax.scatter(X[outlier_mask], y[outlier_mask], c='lightgreen', marker='s', label='Outliers')            
+                # ax.plot(line_X, line_y_ransac, color='red') 
+                #print >>sys.stderr,'Slope: "%.3f"' % ransac.estimator_.coef_[0]
+                #print >>sys.stderr,'Intercept: "%.3f"' % ransac.estimator_.intercept_
 
-        if points_np[len(points_np)-1][1]>8.0 and len(points_np) > 25:
-            """Chaning the corrdinates as in the moving point cloud self.Y increases as the robot moves forward"""
-            X= np.array(self.Y)
-            y= np.array(self.X)
-            
-            ransac = RANSACRegressor(LinearRegression(), 
-                         max_trials=100, 
-                         min_samples=20, 
-                         residual_threshold=0.01)
-            ransac.fit(X.reshape(-1,1), y)
-            inlier_mask = ransac.inlier_mask_
-            outlier_mask = np.logical_not(inlier_mask)
-            
-            line_X = np.arange(3, 14, 1)
-            line_y_ransac = ransac.predict(line_X[:, np.newaxis])            
-            fig = plt.figure()
-            ax = fig.add_subplot(111)
-            ax.scatter(X[inlier_mask], y[inlier_mask], c='blue', marker='o', label='Inliers')
-            ax.scatter(X[outlier_mask], y[outlier_mask], c='lightgreen', marker='s', label='Outliers')            
-            ax.plot(line_X, line_y_ransac, color='red') 
-            print >>sys.stderr,'Slope: "%.3f"' % ransac.estimator_.coef_[0]
-            print >>sys.stderr,'Intercept: "%.3f"' % ransac.estimator_.intercept_
-            plt.show()
-            
+                predicted_intercept_map =PointStamped()
+                predicted_intercept_map.header.frame_id = "map"
+                predicted_intercept_map.header.stamp = rospy.Time(0)
+                x_pred = np.float64(X[len(X)-1]+2.0)
+                self.counter = int(x_pred)
+                m_slope = ransac.estimator_.coef_[0]
+                #print >>sys.stderr,'m_slope: ' % m_slope
+                c_intercept = ransac.estimator_.intercept_
+                #print >>sys.stderr,'c_intercept: ' % c_intercept
+                y_pred = (x_pred*m_slope) + c_intercept
+
+                """ Changing the coordinates back to its original form while publishing"""
+                predicted_intercept_map.point.x = y_pred
+                predicted_intercept_map.point.y = x_pred
+                predicted_intercept_map = self._transform_pose_2_utm_intercept(predicted_intercept_map,predicted_intercept_map.header.frame_id)
+
+                """Publishing the predicted intercepts in utm frame"""
+                predicted_intercept = PointStamped()
+                predicted_intercept.point.x = predicted_intercept_map.pose.position.x
+                predicted_intercept.point.y = predicted_intercept_map.pose.position.y
+                predicted_intercept.header.frame_id = predicted_intercept_map.header.frame_id
+
+                self.pub_predicted_intercept.publish(predicted_intercept)
+                #rospy.sleep(3.0)
+                #plt.show()
+          
+                
         """Fit a line using 3D points"""
         """
         print >>sys.stderr, 'points = "%s"'  % points_np
@@ -203,6 +247,28 @@ class sim_sss_detector:
             return self.A, self.B, self.inliers
     """
 
+    def _wait_for_transform(self, from_frame, to_frame):
+        """Wait for transform from from_frame to to_frame"""
+        trans = None
+        while trans is None:
+            try:
+                trans = self.tf_buffer.lookup_transform(
+                    to_frame, from_frame, rospy.Time())
+            except (tf2_ros.LookupException, tf2_ros.ConnectivityException,
+                    tf2_ros.ExtrapolationException) as error:
+                print('Failed to transform. Error: {}'.format(error))
+        return trans  
+    def _transform_pose_2_utm_intercept(self, predicted_point, from_frame):
+        """Transform intercepts from map frame to utm frame and shifting the x by 2 units, so that 
+        when robot tries to goto this waypoint it doesn't hits the rope"""
+        pose =PoseStamped()
+        pose.pose.position.x = predicted_point.point.x
+        pose.pose.position.y = predicted_point.point.y
+        pose.pose.position.z = 0.0
+        trans = self._wait_for_transform(from_frame=from_frame,
+                                         to_frame="utm")
+        pose_transformed = tf2_geometry_msgs.do_transform_pose(pose, trans)
+        return pose_transformed 
 
     def _rviz_line(self,X, Y):
         marker_line = Marker()
