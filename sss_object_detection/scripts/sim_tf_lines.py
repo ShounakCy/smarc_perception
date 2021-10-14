@@ -57,7 +57,7 @@ class sim_sss_detector:
         """Update prev_pose and current_pose according to the odom msg received"""
 
         self.current_pose = self._transform_pose(
-            msg.pose, from_frame=msg.header.frame_id)
+            msg.pose, from_frame=msg.header.frame_id).pose
 
     def _tf_marker_pose(self,msg):
 
@@ -120,7 +120,7 @@ class sim_sss_detector:
         
         dist_from_line= math.sqrt(c*c)
         
-        if dist_from_line<6:
+        if dist_from_line<10:
 
             #LINE DETECTED'
             if m<0 and x1>0 and x3<0 and c>=y1 and c<=y3 :
@@ -138,13 +138,11 @@ class sim_sss_detector:
                 self._rviz_line(self.marked_positions_1, self.marked_positions_3,1)
                 self._detect_pcl(marker_transformed, self.marked_positions_1, c)
 
-                self.pub_intercept.publish(self.detected_points)
             elif m>0 and x1>0 and x3<0 and c<=y1 and c>=y3 :
             
                 self._rviz_line(self.marked_positions_1, self.marked_positions_3,1)
                 self._detect_pcl(marker_transformed, self.marked_positions_1, c)
 
-                self.pub_intercept.publish(self.detected_points)
             elif m==0 and (c==y1 or c==y3):
             
                 self._rviz_line(self.marked_positions_1, self.marked_positions_3,1)
@@ -159,8 +157,17 @@ class sim_sss_detector:
  
     def _detect_pcl(self,m_t, m1,c):
 
+       
+        #intercept_msg_GT = self._transform_pose_2_map(m_t,m_t.header.frame_id,c)
+        #print >>sys.stderr,'intercept_msg_GT "%s"'  % intercept_msg_GT
+
+        #Transforming  the intercepts from GT frame to Robot frame
+        intercept_msg_base = self._transform_pose_2_base(m_t,m_t.header.frame_id)
         #Transforming  the intercepts from Robot frame to Map frame
-        intercept_msg= self._transform_pose_2_map(m_t,m_t.header.frame_id,c)
+        intercept_msg= self._transform_pose_2_map(intercept_msg_base,intercept_msg_base.header.frame_id,c)
+        #print >>sys.stderr,'intercept_msg "%s"'  % intercept_msg
+
+        
         self.detected_points.header.frame_id = intercept_msg.header.frame_id
         self.detected_points.header.stamp =rospy.Time.now()
         #adding noise to the x-coordinates
@@ -253,16 +260,29 @@ class sim_sss_detector:
                     tf2_ros.ExtrapolationException) as error:
                 print('Failed to transform. Error: {}'.format(error))
         return trans  
+    
+    
 
     def _transform_pose(self, pose, from_frame):
-        """Transform the subscribed marker positions from map frame to robot frame, 
+        """Transform the subscribed marker positions from map frame to gt frame, 
         in order to calculate the intercepts in robot frame"""
+        trans = self._wait_for_transform(from_frame=from_frame,
+                                         to_frame=self.gt_frame_id)
+        pose_transformed = tf2_geometry_msgs.do_transform_pose(pose, trans)
+        return pose_transformed
+
+    def _transform_pose_2_base(self, pose, from_frame):
+        """Transform the intercepts from GT frame to robot frame"""
+        #pose.pose.position.x = 0.0
+        #pose.pose.position.y = c
+        #pose.pose.position.z = 0.0
         trans = self._wait_for_transform(from_frame=from_frame,
                                          to_frame=self.published_frame_id)
         pose_transformed = tf2_geometry_msgs.do_transform_pose(pose, trans)
         return pose_transformed
 
     def _transform_pose_2_map(self, pose, from_frame,c):
+    #def _transform_pose_2_map(self, pose, from_frame):
         """Transform intercept from robot frame to map frame.
          Since it's coming from the robot frame, the x-position is cset to 0"""
         pose.pose.position.x = 0.0

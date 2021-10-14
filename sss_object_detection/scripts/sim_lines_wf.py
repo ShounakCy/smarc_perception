@@ -84,9 +84,13 @@ class sim_sss_detector:
 
 
     def _update_pose(self, msg):
+        """Update pose based on msg from simulated groundtruth odom at /{robot_name}/sim/odom"""
+        
         #print >>sys.stderr, 'robot pose::::::::::::::::::    = "%s"'  % msg
 
-        self.current_pose = msg.pose
+        self.current_pose = self._transform_pose(
+            msg.pose, from_frame=msg.header.frame_id).pose
+        #print >>sys.stderr, 'self.current_pose::::::::::::::::::    = "%s"'  % self.current_pose
 
 
     def _point_cloud(self,pts):
@@ -122,26 +126,26 @@ class sim_sss_detector:
         #r = rospy.Rate(15.)
         
         
-        if points_np[len(points_np)-1][1] >= 6 and len(points_np) > 20:
-            print >>sys.stderr, 'counter1 =  "%s"'  % self.counter 
-            print >>sys.stderr, 'range1 =  "%s"'  % int(points_np[len(points_np)-1][1])
-            if self.counter <= int(points_np[len(points_np)-1][1]):
-                print >>sys.stderr, 'counter2 =  "%s"'  % self.counter 
-                print >>sys.stderr, 'range2 =  "%s"'  % int(points_np[len(points_np)-1][1])
+        if points_np[len(points_np)-1][1] >= 15:
+            #print >>sys.stderr, 'counter1 =  "%s"'  % self.counter 
+            #print >>sys.stderr, 'range1 =  "%s"'  % int(points_np[len(points_np)-1][1])
+            #if self.counter <= int(points_np[len(points_np)-1][1]):
+                #print >>sys.stderr, 'counter2 =  "%s"'  % self.counter 
+                #print >>sys.stderr, 'range2 =  "%s"'  % int(points_np[len(points_np)-1][1])
                 """Changing the corrdinates as in the moving point cloud self.Y increases as the robot moves forward"""
                 X= np.array(self.Y)
                 y= np.array(self.X)
                 
                 ransac = RANSACRegressor(LinearRegression(), 
                             max_trials=100, 
-                            min_samples=20, 
+                            min_samples=10, 
                             residual_threshold=0.001)
                 ransac.fit(X.reshape(-1,1), y)
                 inlier_mask = ransac.inlier_mask_
                 outlier_mask = np.logical_not(inlier_mask)
                 
-                line_X = np.arange(3, 14, 1)
-                line_y_ransac = ransac.predict(line_X[:, np.newaxis])            
+                #line_X = np.arange(3, 14, 1)
+                #line_y_ransac = ransac.predict(line_X[:, np.newaxis])            
                 # fig = plt.figure()
                 # ax = fig.add_subplot(111)
                 # ax.scatter(X[inlier_mask], y[inlier_mask], c='blue', marker='o', label='Inliers')
@@ -153,8 +157,8 @@ class sim_sss_detector:
                 predicted_intercept_map =PointStamped()
                 predicted_intercept_map.header.frame_id = "map"
                 predicted_intercept_map.header.stamp = rospy.Time(0)
-                x_pred = np.float64(X[len(X)-1]+2.0)
-                self.counter = int(x_pred)
+                x_pred = np.float64(X[len(X)-1]+5.0)
+                #self.counter = int(x_pred)
                 m_slope = ransac.estimator_.coef_[0]
                 #print >>sys.stderr,'m_slope: ' % m_slope
                 c_intercept = ransac.estimator_.intercept_
@@ -269,6 +273,12 @@ class sim_sss_detector:
                                          to_frame="utm")
         pose_transformed = tf2_geometry_msgs.do_transform_pose(pose, trans)
         return pose_transformed 
+
+    def _transform_pose(self, pose, from_frame):
+        trans = self._wait_for_transform(from_frame=from_frame,
+                                         to_frame=self.gt_frame_id)
+        pose_transformed = tf2_geometry_msgs.do_transform_pose(pose, trans)
+        return pose_transformed
 
     def _rviz_line(self,X, Y):
         marker_line = Marker()
